@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Bulk Image Studio",
+  "description": "A professional-grade bulk image processor that leverages Gemini AI to transform entire folders of images. Select a local directory, apply AI prompts, and save results directly back to your file system.",
+  "requestFramePermissions": []
+}
