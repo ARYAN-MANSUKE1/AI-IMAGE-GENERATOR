@@ -19,6 +19,7 @@ function App() {
   const [status, setStatus] = useState<AppStatus>('idle');
   const [error, setError] = useState<string>('');
   const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
 
   // Configuration state
   const [productDescription, setProductDescription] = useState<string>('High-quality professional product');
@@ -345,10 +346,20 @@ function App() {
     const zip = new JSZip();
     const folder = zip.folder(product.name);
 
+    let downloadCount = 0;
     for (const img of product.generatedImages) {
       if (img.status === 'completed') {
-        folder?.file(img.name, img.file);
+        const imageKey = `${product.name}-${img.name}`;
+        if (selectedImages.has(imageKey)) {
+          folder?.file(img.name, img.file);
+          downloadCount++;
+        }
       }
+    }
+
+    if (downloadCount === 0) {
+      alert('Please select at least one image to download');
+      return;
     }
 
     const blob = await zip.generateAsync({ type: 'blob' });
@@ -398,6 +409,50 @@ function App() {
 
   const getRemainingProducts = () => {
     return Math.min(batchSize, products.length - currentProductIndex);
+  };
+
+  const handleToggleImageSelection = (productName: string, imageName: string) => {
+    const imageKey = `${productName}-${imageName}`;
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(imageKey)) {
+        newSet.delete(imageKey);
+      } else {
+        newSet.add(imageKey);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllImages = (product: Product) => {
+    if (!product.generatedImages) return;
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      product.generatedImages?.forEach(img => {
+        if (img.status === 'completed') {
+          newSet.add(`${product.name}-${img.name}`);
+        }
+      });
+      return newSet;
+    });
+  };
+
+  const handleDeselectAllImages = (product: Product) => {
+    if (!product.generatedImages) return;
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      product.generatedImages?.forEach(img => {
+        newSet.delete(`${product.name}-${img.name}`);
+      });
+      return newSet;
+    });
+  };
+
+  const getSelectedCount = (product: Product) => {
+    if (!product.generatedImages) return 0;
+    return product.generatedImages.filter(img => 
+      selectedImages.has(`${product.name}-${img.name}`)
+    ).length;
   };
 
   const overallProgress = totalAnglesToProcess > 0 
@@ -774,18 +829,41 @@ function App() {
               {currentProduct.generatedImages && currentProduct.generatedImages.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white">Generated Angles</h3>
-                    <button
-                      onClick={() => handleDownloadProduct(currentProduct)}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download This Product
-                    </button>
+                    <h3 className="text-lg font-semibold text-white">
+                      Generated Angles ({getSelectedCount(currentProduct)} selected)
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSelectAllImages(currentProduct)}
+                        className="px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 border border-gray-700 transition-colors text-sm"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={() => handleDeselectAllImages(currentProduct)}
+                        className="px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 border border-gray-700 transition-colors text-sm"
+                      >
+                        Deselect All
+                      </button>
+                      <button
+                        onClick={() => handleDownloadProduct(currentProduct)}
+                        disabled={getSelectedCount(currentProduct) === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Selected ({getSelectedCount(currentProduct)})
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     {currentProduct.generatedImages.map((img, index) => (
-                      <ImageCard key={index} item={img} />
+                      <ImageCard 
+                        key={index} 
+                        item={img}
+                        productName={currentProduct.name}
+                        isSelected={selectedImages.has(`${currentProduct.name}-${img.name}`)}
+                        onToggleSelect={handleToggleImageSelection}
+                      />
                     ))}
                   </div>
                 </div>

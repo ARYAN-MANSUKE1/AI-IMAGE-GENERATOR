@@ -5,9 +5,12 @@ import { CheckCircle2, AlertCircle, Loader2, Folder } from 'lucide-react';
 
 interface ImageCardProps {
   item: ImageFile;
+  productName: string;
+  isSelected: boolean;
+  onToggleSelect: (productName: string, imageName: string) => void;
 }
 
-const ImageCard: React.FC<ImageCardProps> = ({ item }) => {
+const ImageCard: React.FC<ImageCardProps> = ({ item, productName, isSelected, onToggleSelect }) => {
   return (
     <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-lg group hover:border-indigo-500/50 transition-all flex flex-col">
       <div className="relative aspect-square bg-slate-900 flex items-center justify-center overflow-hidden">
@@ -15,6 +18,20 @@ const ImageCard: React.FC<ImageCardProps> = ({ item }) => {
           <img src={item.preview} alt="Result" className="object-cover w-full h-full" />
         ) : (
           <div className="text-slate-500">No image</div>
+        )}
+        
+        {/* Selection Checkbox */}
+        {item.status === 'completed' && (
+          <div className="absolute top-2 left-2 z-10">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(productName, item.name)}
+                className="w-5 h-5 rounded border-2 border-white bg-slate-900/80 checked:bg-green-600 checked:border-green-600 cursor-pointer"
+              />
+            </label>
+          </div>
         )}
         
         {item.status === 'processing' && (

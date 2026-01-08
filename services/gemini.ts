@@ -65,20 +65,21 @@ Generate one product image at the specified angle.`;
     // The image property contains the actual image data
     const imageData = generatedImage.image;
     
-    // If the image is already a data URL, return it
+    // If the image is already a data URL, resize and return it
     if (typeof imageData === 'string' && imageData.startsWith('data:')) {
-      return imageData;
+      return await resizeBase64Image(imageData, targetWidth);
     }
     
     // Otherwise, we need to convert it
     // The SDK might return it as a Blob or ArrayBuffer
     if (imageData instanceof Blob) {
-      return new Promise((resolve, reject) => {
+      const base64Image = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(imageData);
       });
+      return await resizeBase64Image(base64Image, targetWidth);
     }
     
     throw new Error("Unexpected image format from Imagen model.");
@@ -133,6 +134,11 @@ export const transformImage = async (
             text: prompt
           }
         ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: '1:1'
+        }
       }
     });
 
@@ -152,7 +158,8 @@ export const transformImage = async (
       throw new Error("No image data returned from model.");
     }
 
-    return `data:image/png;base64,${resultBase64}`;
+    const base64Image = `data:image/png;base64,${resultBase64}`;
+    return await resizeBase64Image(base64Image, 800);
   } catch (err: any) {
     if (retryCount < 3 && (err.status >= 500 || err.status === 429)) {
       const delay = Math.pow(2, retryCount) * 1000;
@@ -268,6 +275,11 @@ Generate the ${angle} view now.`;
             text: prompt
           }
         ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: '1:1'
+        }
       }
     });
 
@@ -287,7 +299,8 @@ Generate the ${angle} view now.`;
       throw new Error("No image data returned from model.");
     }
 
-    return `data:image/png;base64,${resultBase64}`;
+    const base64Image = `data:image/png;base64,${resultBase64}`;
+    return await resizeBase64Image(base64Image, targetWidth);
   } catch (err: any) {
     if (retryCount < 3 && (err.status >= 500 || err.status === 429)) {
       const delay = Math.pow(2, retryCount) * 1000;
@@ -410,6 +423,11 @@ Generate all ${angles.length} angle views now, returning them as separate images
             text: prompt
           }
         ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: '1:1'
+        }
       }
     });
 
@@ -424,8 +442,10 @@ Generate all ${angles.length} angle views now, returning them as separate images
       console.log(`\ud83d\udccb Response contains ${candidate.content.parts.length} parts`);
       for (const part of candidate.content.parts) {
         if (part.inlineData) {
-          resultImages.push(`data:image/png;base64,${part.inlineData.data}`);
-          console.log(`  \u2713 Extracted image ${resultImages.length}`);
+          const base64Image = `data:image/png;base64,${part.inlineData.data}`;
+          const resizedImage = await resizeBase64Image(base64Image, targetWidth);
+          resultImages.push(resizedImage);
+          console.log(`  \u2713 Extracted and resized image ${resultImages.length} to ${targetWidth}x${targetWidth}`);
         }
       }
     }
@@ -458,6 +478,34 @@ Generate all ${angles.length} angle views now, returning them as separate images
     }
     throw err;
   }
+};
+
+/**
+ * Resize base64 image to exact dimensions (800x800)
+ * Ensures all generated images are exactly the required size
+ */
+const resizeBase64Image = async (base64Image: string, targetSize: number = 800): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = targetSize;
+      canvas.height = targetSize;
+      
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) return reject(new Error("Failed to get canvas context"));
+      
+      // Use high quality image smoothing
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Draw image to exact square dimensions
+      ctx.drawImage(img, 0, 0, targetSize, targetSize);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error("Failed to load image for resizing"));
+    img.src = base64Image;
+  });
 };
 
 /**
