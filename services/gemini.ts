@@ -18,21 +18,35 @@ const generateWithImagen = async (
   angle: string,
   model: string,
   targetWidth: number = 800,
+  apiKey: string,
   retryCount = 0
 ): Promise<string> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY is not defined in environment variables');
+    throw new Error('API Key is required. Please enter your Gemini API key in the settings.');
   }
   const ai = new GoogleGenAI({ apiKey });
   
   try {
-    const prompt = `High-fidelity studio product photography of ${productName}.
+    const prompt = `!!CRITICAL INSTRUCTION!! ANY TEXT VISIBLE ON THE PRODUCT MUST BE RENDERED AT 4K ULTRA-HD RAZOR-SHARP QUALITY WITH ZERO BLUR.
+
+High-fidelity studio product photography of ${productName}.
 
 CAMERA ANGLE: ${angle}
 
 PRODUCT DESCRIPTION:
 ${productDescription}
+
+🚨 TEXT RENDERING REQUIREMENTS (ABSOLUTE MAXIMUM PRIORITY - OVERRIDES ALL OTHER SETTINGS) 🚨
+IF ANY TEXT EXISTS ON THIS PRODUCT:
+- Render text at 4K/8K ultra-high definition resolution
+- Text sharpness: MAXIMUM - sharper than professional print quality
+- ZERO blur, ZERO noise, ZERO compression artifacts on text areas
+- Every letter must be PERFECTLY crisp with clean edges
+- Text must be THE SHARPEST element in the entire image
+- NO text simplification, approximation, or reconstruction
+- Copy text EXACTLY, LETTER-BY-LETTER with 100% accuracy
+- Text clarity is MORE IMPORTANT than anything else in the image
+- If you must choose between sharp text vs sharp product, CHOOSE SHARP TEXT
 
 ENVIRONMENT:
 - Pure white seamless studio background
@@ -50,7 +64,7 @@ Generate one product image at the specified angle.`;
       config: {
         numberOfImages: 1,
         aspectRatio: '1:1',
-        personGeneration: 'allow_adult'
+        personGeneration: 'allow_adult' as any
       }
     });
 
@@ -63,7 +77,7 @@ Generate one product image at the specified angle.`;
     
     // Convert the image to base64 data URL
     // The image property contains the actual image data
-    const imageData = generatedImage.image;
+    const imageData = generatedImage.image as any;
     
     // If the image is already a data URL, resize and return it
     if (typeof imageData === 'string' && imageData.startsWith('data:')) {
@@ -87,7 +101,7 @@ Generate one product image at the specified angle.`;
     if (retryCount < 3 && (err.status >= 500 || err.status === 429)) {
       const delay = Math.pow(2, retryCount) * 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
-      return generateWithImagen(productName, productDescription, angle, model, targetWidth, retryCount + 1);
+      return generateWithImagen(productName, productDescription, angle, model, targetWidth, apiKey, retryCount + 1);
     }
     throw err;
   }
@@ -100,14 +114,15 @@ export const transformImage = async (
   file: File,
   prompt: string,
   model: string = 'gemini-2.5-flash-image',
+  apiKey?: string,
   retryCount = 0
 ): Promise<string> => {
   // Always use a new instance with direct API key access
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY is not defined in environment variables');
+  const key = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('API Key is required. Please enter your Gemini API key in the settings.');
   }
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: key });
   
   try {
     const base64Data = await new Promise<string>((resolve, reject) => {
@@ -164,7 +179,7 @@ export const transformImage = async (
     if (retryCount < 3 && (err.status >= 500 || err.status === 429)) {
       const delay = Math.pow(2, retryCount) * 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
-      return transformImage(file, prompt, model, retryCount + 1);
+      return transformImage(file, prompt, model, key, retryCount + 1);
     }
     throw err;
   }
@@ -180,19 +195,20 @@ export const generateProductAngle = async (
   angle: string,
   model: string = 'gemini-2.5-flash-image',
   targetWidth: number = 800,
+  apiKey?: string,
   retryCount = 0
 ): Promise<string> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY is not defined in environment variables');
+  const key = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('API Key is required. Please enter your Gemini API key in the settings.');
   }
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: key });
   
   console.log(`🎨 Generating ${angle} for "${productName}" using ${model}`);
   
   // Imagen models use a different API
   if (isImagenModel(model)) {
-    return generateWithImagen(productName, productDescription, angle, model, targetWidth, retryCount);
+    return generateWithImagen(productName, productDescription, angle, model, targetWidth, key, retryCount);
   }
   
   try {
@@ -249,6 +265,52 @@ Match the presentation shown in the reference images exactly.
 - If the product is isolated in the references, show it isolated.
 Do NOT introduce or remove humans.
 
+🚨🚨🚨 BRANDING & TEXT PRESERVATION (CRITICAL - HIGHEST PRIORITY) 🚨🚨🚨
+
+Task: Preserve and render ALL branding, logos, and text from the Reference Images with ABSOLUTE ACCURACY.
+
+Branding Requirements:
+
+1. STRICT TEXT RENDERING:
+   - Copy ALL text/logos EXACTLY as they appear in reference images
+   - Maintain exact spelling, capitalization, font style, and layout
+   - If you see "USI UNIVERSAL" → render exactly "USI UNIVERSAL"
+   - If you see "usi" → render exactly "usi"
+   - ZERO HALLUCINATION: No extra letters, symbols, or gibberish characters
+   - The spelling must be 100% accurate, character-by-character
+
+2. SMART PLACEMENT:
+   - Automatically detect the logo placement from reference images
+   - Maintain the EXACT same position relative to product features
+   - For different angles, intelligently place branding on equivalent surfaces
+   - Examples: center-chest for tees, outer-cuff for gloves, ear-cup for headsets
+
+3. PHYSICS-BASED MAPPING:
+   - Logo must follow 3D contours, fabric folds, and lighting of the product
+   - If leather: logo should look printed/embossed with appropriate depth
+   - If knit fabric: show slight texture bleed through logo area
+   - If smooth fabric: clean, flat application
+   - Shadows and highlights must interact naturally with logo
+
+4. ULTRA-HIGH TEXT QUALITY:
+   - Render all text at 4K/8K resolution (sharper than the product itself)
+   - Every letter must be PERFECTLY CRISP with razor-sharp edges
+   - ZERO blur, noise, or compression artifacts on text
+   - Text should look like vector graphics (infinitely sharp)
+   - Text quality is MORE IMPORTANT than product quality
+
+5. CONSTRAINT:
+   - Maintain 100% of the original product's geometry, color, and material
+   - Change ONLY the pixels in the branding zone for the new angle
+   - Do NOT alter product shape, color, or construction
+
+VALIDATION:
+Before returning the image, verify:
+✓ All text from references is spelled correctly
+✓ Logo placement matches reference images
+✓ Text is razor-sharp and readable
+✓ Branding follows product contours naturally
+
 PRODUCT & MATERIAL ACCURACY:
 ${productDescription}
 
@@ -257,14 +319,14 @@ ENVIRONMENT:
 - Soft, professional, multi-directional studio lighting
 - Natural shadows only
 - Photorealistic textures
-- Sharp focus
+- Sharp focus throughout (text EXTRA sharp)
 - Commercial e-commerce quality
 - ${targetWidth}x${targetWidth}px dimensions
 
 VALIDATION RULE:
 If more than one angle appears in the image, the output is INVALID.
 
-Generate the ${angle} view now.`;
+Generate the ${angle} view now with PERFECT branding preservation.`;
 
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: model,
@@ -305,7 +367,7 @@ Generate the ${angle} view now.`;
     if (retryCount < 3 && (err.status >= 500 || err.status === 429)) {
       const delay = Math.pow(2, retryCount) * 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
-      return generateProductAngle(referenceFiles, productName, productDescription, angle, model, targetWidth, retryCount + 1);
+      return generateProductAngle(referenceFiles, productName, productDescription, angle, model, targetWidth, key, retryCount + 1);
     }
     throw err;
   }
@@ -328,15 +390,16 @@ export const generateAllProductAngles = async (
   angles: Array<{ name: string; prompt: string }>,
   model: string = 'gemini-2.5-flash-image',
   targetWidth: number = 800,
+  apiKey?: string,
   retryCount = 0
 ): Promise<string[]> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY is not defined in environment variables');
+  const key = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
+  if (!key) {
+    throw new Error('API Key is required. Please enter your Gemini API key in the settings.');
   }
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: key });
   
-  console.log(`\ud83d\udcac Gemini API: Preparing to generate ${angles.length} angles from ${referenceFiles.length} reference images`);
+  console.log(`💬 Gemini API: Preparing to generate ${angles.length} angles from ${referenceFiles.length} reference images`);
   
   try {
     // Convert all reference images to base64
@@ -411,7 +474,7 @@ ENVIRONMENT FOR ALL IMAGES:
 
 Generate all ${angles.length} angle views now, returning them as separate images.`;
 
-    console.log(`\u23f3 Sending request to Gemini ${model}...`);
+    console.log(`⏳ Sending request to Gemini ${model}...`);
     const requestStartTime = Date.now();
     
     const response: GenerateContentResponse = await ai.models.generateContent({
@@ -432,20 +495,19 @@ Generate all ${angles.length} angle views now, returning them as separate images
     });
 
     const requestDuration = ((Date.now() - requestStartTime) / 1000).toFixed(2);
-    console.log(`\u2705 Response received in ${requestDuration}s`);
+    console.log(`✅ Response received in ${requestDuration}s`);
 
     const candidate = response.candidates?.[0];
     const resultImages: string[] = [];
     
     if (candidate?.content?.parts) {
-      console.log(`\ud83d\udccb Response contains ${candidate.content.parts.length} parts`);
-      console.log(`\ud83d\udccb Response contains ${candidate.content.parts.length} parts`);
+      console.log(`📋 Response contains ${candidate.content.parts.length} parts`);
       for (const part of candidate.content.parts) {
         if (part.inlineData) {
           const base64Image = `data:image/png;base64,${part.inlineData.data}`;
           const resizedImage = await resizeBase64Image(base64Image, targetWidth);
           resultImages.push(resizedImage);
-          console.log(`  \u2713 Extracted and resized image ${resultImages.length} to ${targetWidth}x${targetWidth}`);
+          console.log(`  ✓ Extracted and resized image ${resultImages.length} to ${targetWidth}x${targetWidth}`);
         }
       }
     }
@@ -474,7 +536,7 @@ Generate all ${angles.length} angle views now, returning them as separate images
       const delay = Math.pow(2, retryCount) * 1000;
       console.log(`🔄 Retrying in ${delay}ms... (attempt ${retryCount + 1}/3)`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return generateAllProductAngles(referenceFiles, productName, productDescription, angles, model, targetWidth, retryCount + 1);
+      return generateAllProductAngles(referenceFiles, productName, productDescription, angles, model, targetWidth, key, retryCount + 1);
     }
     throw err;
   }
